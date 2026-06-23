@@ -1,0 +1,26 @@
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Data files (contains HDF5 files >100MB)
+data/
+*.hdf5
+*.h5
+*.bak
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# VS Code and editor caches
+.vscode/
+.idea/
+.agents/
+.system_generated/
