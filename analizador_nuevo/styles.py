@@ -114,6 +114,13 @@ APP_QSS = """
     QPushButton#BtnSave:hover {
         background-color: #7C4DFF;
     }
+    QPushButton#BtnGIF {
+        background-color: #D81B60;
+        border: none;
+    }
+    QPushButton#BtnGIF:hover {
+        background-color: #F48FB1;
+    }
     QToolTip {
         background-color: #1A1A24;
         color: #FFFFFF;

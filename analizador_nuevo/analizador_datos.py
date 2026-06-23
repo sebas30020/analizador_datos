@@ -1,5 +1,7 @@
 import sys
 import os
+import io
+from PIL import Image
 import h5py
 import numpy as np
 
@@ -257,6 +259,11 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
         self.btn_save_img.setObjectName("BtnSave")
         self.btn_save_img.clicked.connect(self.guardar_grafico)
         lay.addWidget(self.btn_save_img)
+
+        self.btn_export_gif = QtWidgets.QPushButton("🎞️ Generar GIF Animado")
+        self.btn_export_gif.setObjectName("BtnGIF")
+        self.btn_export_gif.clicked.connect(self.generar_gif)
+        lay.addWidget(self.btn_export_gif)
 
         lay.addStretch()
         return panel
@@ -1656,6 +1663,196 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 QtWidgets.QMessageBox.critical(
                     self, "Error al Guardar",
                     f"No se pudo guardar la imagen:\n{e}")
+
+    def generar_gif(self):
+        if not self.hdf_file:
+            QtWidgets.QMessageBox.warning(self, "Sin archivo", "Por favor, abre un archivo HDF5 primero.")
+            return
+
+        # 1. Calcular total_capturas
+        if self.chk_compare_groups.isChecked():
+            total_a = 0
+            chunks_a = self.obtener_chunks_grupo_a()
+            for cname in chunks_a:
+                if cname in self.test_group:
+                    info = dhn.obtener_info_chunk(self.test_group, cname)
+                    total_a += info['n_signals']
+            total_b = 0
+            chunks_b = self.obtener_chunks_grupo_b()
+            for cname in chunks_b:
+                if cname in self.test_group:
+                    info = dhn.obtener_info_chunk(self.test_group, cname)
+                    total_b += info['n_signals']
+            total_capturas = max(total_a, total_b)
+        else:
+            chunks = self.obtener_chunks_seleccionados()
+            total_capturas = 0
+            for cname in chunks:
+                if cname in self.test_group:
+                    info = dhn.obtener_info_chunk(self.test_group, cname)
+                    total_capturas += info['n_signals']
+
+        if total_capturas <= 0:
+            QtWidgets.QMessageBox.warning(self, "Sin señales", "No hay señales disponibles para generar el GIF.")
+            return
+
+        # 2. Preguntar ruta de destino
+        sufijo = "completo" if self.combo_modo_vis.currentIndex() == 2 else self.combo_grupo.currentText()
+        default_name = f"animacion_{sufijo}.gif"
+        options = QtWidgets.QFileDialog.Options()
+        filepath, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "Guardar GIF Animado", default_name,
+            "Archivos GIF (*.gif)",
+            options=options)
+
+        if not filepath:
+            return
+
+        # 3. Guardar estado actual
+        original_mode = self.combo_modo_vis.currentIndex()
+        original_spin_val = self.spin_individual.value()
+
+        # Forzar modo de señal individual para capturar cada frame
+        self.combo_modo_vis.setCurrentIndex(1)
+        QtWidgets.QApplication.processEvents()
+
+        # 4. Configurar diálogo de progreso
+        progress = QtWidgets.QProgressDialog("Inicializando frames...", "Cancelar", 0, total_capturas, self)
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.setValue(0)
+        progress.show()
+        QtWidgets.QApplication.processEvents()
+
+        frames = []
+        frame_timestamps = []
+
+        # 5. Iterar sobre las capturas
+        success = True
+        try:
+            for i in range(total_capturas):
+                if progress.wasCanceled():
+                    success = False
+                    break
+
+                progress.setLabelText(f"Procesando frame {i + 1} de {total_capturas}...")
+                progress.setValue(i)
+                QtWidgets.QApplication.processEvents()
+
+                # Cambiar señal activa
+                self.spin_individual.setValue(i + 1)
+                QtWidgets.QApplication.processEvents()
+
+                # Obtener timestamp de este frame para calcular los retardos proporcionales
+                t_frame = 0.0
+                if self.chk_compare_groups.isChecked():
+                    t_a = None
+                    t_b = None
+                    try:
+                        chunk_name_a, local_idx_a, _ = self.obtener_senal_grupo(chunks_a, i + 1)
+                        _, t_a, _ = dhn.obtener_datos_senal(self.test_group, chunk_name_a, local_idx_a)
+                    except ValueError:
+                        pass
+                    try:
+                        chunk_name_b, local_idx_b, _ = self.obtener_senal_grupo(chunks_b, i + 1)
+                        _, t_b, _ = dhn.obtener_datos_senal(self.test_group, chunk_name_b, local_idx_b)
+                    except ValueError:
+                        pass
+                    if t_a is not None:
+                        t_frame = t_a
+                    elif t_b is not None:
+                        t_frame = t_b
+                else:
+                    try:
+                        chunk_name, local_idx, _ = self.obtener_senal_grupo(chunks, i + 1)
+                        _, t_frame, _ = dhn.obtener_datos_senal(self.test_group, chunk_name, local_idx)
+                    except ValueError:
+                        pass
+                
+                frame_timestamps.append(t_frame)
+
+                # Capturar gráfico del canvas
+                buffer = io.BytesIO()
+                self.fig.savefig(buffer, format='png', dpi=120, bbox_inches='tight')
+                buffer.seek(0)
+                img = Image.open(buffer)
+                img.load()
+                frames.append(img)
+
+            progress.setValue(total_capturas)
+
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Error durante la generación", f"Error procesando frames:\n{e}")
+            success = False
+
+        # 6. Restaurar estado de GUI original
+        self.combo_modo_vis.blockSignals(True)
+        self.combo_modo_vis.setCurrentIndex(original_mode)
+        self.combo_modo_vis.blockSignals(False)
+        
+        self.spin_individual.blockSignals(True)
+        self.spin_individual.setValue(original_spin_val)
+        self.spin_individual.blockSignals(False)
+        
+        self.graficar_datos()
+        QtWidgets.QApplication.processEvents()
+
+        if not success:
+            QtWidgets.QMessageBox.warning(self, "Cancelado / Fallido", "No se generó el archivo GIF.")
+            return
+
+        if not frames:
+            QtWidgets.QMessageBox.warning(self, "Sin imágenes", "No se capturó ninguna imagen.")
+            return
+
+        # 7. Calcular retardos proporcionales a la separación temporal
+        durations = []
+        if len(frames) > 1:
+            raw_dts = []
+            for i in range(1, len(frame_timestamps)):
+                dt = frame_timestamps[i] - frame_timestamps[i-1]
+                raw_dts.append(max(0.0, dt))
+            
+            avg_dt = np.mean(raw_dts) if raw_dts else 1.0
+            if avg_dt == 0.0:
+                avg_dt = 1.0
+            
+            # El dt promedio equivale a 400 ms en la animación
+            scale_factor = 400.0 / avg_dt
+            
+            for i in range(len(frame_timestamps)):
+                if i == 0:
+                    dt = frame_timestamps[1] - frame_timestamps[0]
+                    val = int(max(0.0, dt) * scale_factor)
+                else:
+                    dt = frame_timestamps[i] - frame_timestamps[i-1]
+                    val = int(max(0.0, dt) * scale_factor)
+                
+                # Límites: mínimo 100 ms, máximo 2000 ms
+                val = max(100, min(2000, val))
+                durations.append(val)
+        else:
+            durations = [400]
+
+        # 8. Guardar GIF
+        progress.setLabelText("Guardando archivo GIF...")
+        QtWidgets.QApplication.processEvents()
+
+        try:
+            frames[0].save(
+                filepath,
+                save_all=True,
+                append_images=frames[1:],
+                duration=durations,
+                loop=0
+            )
+            QtWidgets.QMessageBox.information(
+                self, "GIF Generado",
+                f"El GIF animado ha sido generado con éxito en:\n{filepath}\n\n"
+                f"Frames: {len(frames)}\n"
+                f"Duración promedio por frame: {int(np.mean(durations))} ms"
+            )
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Error al Guardar GIF", f"No se pudo escribir el archivo GIF:\n{e}")
 
     def closeEvent(self, event):
         self.cerrar_archivo_activo()
