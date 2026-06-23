@@ -1669,25 +1669,27 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "Sin archivo", "Por favor, abre un archivo HDF5 primero.")
             return
 
-        # 1. Calcular total_capturas
-        if self.chk_compare_groups.isChecked():
-            total_a = 0
+        # 1. Calcular total_capturas y recolectar chunks
+        compare = self.chk_compare_groups.isChecked()
+        if compare:
             chunks_a = self.obtener_chunks_grupo_a()
+            chunks_b = self.obtener_chunks_grupo_b()
+            total_a = 0
             for cname in chunks_a:
                 if cname in self.test_group:
                     info = dhn.obtener_info_chunk(self.test_group, cname)
                     total_a += info['n_signals']
             total_b = 0
-            chunks_b = self.obtener_chunks_grupo_b()
             for cname in chunks_b:
                 if cname in self.test_group:
                     info = dhn.obtener_info_chunk(self.test_group, cname)
                     total_b += info['n_signals']
             total_capturas = max(total_a, total_b)
         else:
-            chunks = self.obtener_chunks_seleccionados()
+            chunks_a = self.obtener_chunks_seleccionados()
+            chunks_b = []
             total_capturas = 0
-            for cname in chunks:
+            for cname in chunks_a:
                 if cname in self.test_group:
                     info = dhn.obtener_info_chunk(self.test_group, cname)
                     total_capturas += info['n_signals']
@@ -1697,37 +1699,230 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
             return
 
         # 2. Preguntar ruta de destino
-        sufijo = "completo" if self.combo_modo_vis.currentIndex() == 2 else self.combo_grupo.currentText()
+        sufijo = "comparacion" if compare else (self.combo_grupo.currentText() if self.combo_grupo.currentText() else "grupo")
         default_name = f"animacion_{sufijo}.gif"
         options = QtWidgets.QFileDialog.Options()
         filepath, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Guardar GIF Animado", default_name,
+            self, "Guardar GIF Animado (Optimizado)", default_name,
             "Archivos GIF (*.gif)",
             options=options)
 
         if not filepath:
             return
 
-        # 3. Guardar estado actual
-        original_mode = self.combo_modo_vis.currentIndex()
-        original_spin_val = self.spin_individual.value()
-
-        # Forzar modo de señal individual para capturar cada frame
-        self.combo_modo_vis.setCurrentIndex(1)
-        QtWidgets.QApplication.processEvents()
-
-        # 4. Configurar diálogo de progreso
-        progress = QtWidgets.QProgressDialog("Inicializando frames...", "Cancelar", 0, total_capturas, self)
+        # 3. Configurar diálogo de progreso
+        progress = QtWidgets.QProgressDialog("Inicializando generador off-screen...", "Cancelar", 0, total_capturas, self)
         progress.setWindowModality(QtCore.Qt.WindowModal)
         progress.setValue(0)
         progress.show()
         QtWidgets.QApplication.processEvents()
 
+        # 4. Crear figura y subplots OFF-SCREEN
+        mostrar_signal = self.chk_signals.isChecked()
+        mostrar_fft = self.chk_fft.isChecked()
+        mostrar_ratio = mostrar_fft and compare
+        mostrar_env = self.chk_env.isChecked() and self.has_env_data()
+
+        active_plots = []
+        if mostrar_signal:
+            active_plots.append('signal')
+        if mostrar_fft:
+            active_plots.append('fft')
+        if mostrar_ratio:
+            active_plots.append('ratio')
+        if mostrar_env:
+            active_plots.append('env')
+
+        n_rows = len(active_plots)
+        n_cols = 2 if compare else 1
+
+        if n_rows == 0:
+            QtWidgets.QMessageBox.warning(self, "Sin canales", "Selecciona al menos un canal para graficar.")
+            return
+
+        # Usar la biblioteca matplotlib en modo off-screen
+        fig_off = plt.figure(figsize=self.fig.get_size_inches(), dpi=120)
+        fig_off.patch.set_facecolor('#0B0B0D')
+
+        # Mapear subplots
+        ax_signal = None
+        ax_signal_b = None
+        ax_fft = None
+        ax_fft_b = None
+        ax_ratio = None
+        ax_env = None
+        ax_env_b = None
+
+        for r, plot_type in enumerate(active_plots):
+            if n_cols == 2:
+                if plot_type == 'ratio':
+                    ax_ratio = fig_off.add_subplot(n_rows, 1, r + 1)
+                else:
+                    ax_a = fig_off.add_subplot(n_rows, n_cols, r * n_cols + 1)
+                    ax_b = fig_off.add_subplot(n_rows, n_cols, r * n_cols + 2, sharey=ax_a if plot_type != 'env' else None)
+                    if plot_type == 'signal':
+                        ax_signal = ax_a
+                        ax_signal_b = ax_b
+                    elif plot_type == 'fft':
+                        ax_fft = ax_a
+                        ax_fft_b = ax_b
+                    elif plot_type == 'env':
+                        ax_env = ax_a
+                        ax_env_b = ax_b
+            else:
+                ax = fig_off.add_subplot(n_rows, n_cols, r + 1)
+                if plot_type == 'signal':
+                    ax_signal = ax
+                elif plot_type == 'fft':
+                    ax_fft = ax
+                elif plot_type == 'env':
+                    ax_env = ax
+
+        # Ajustes de márgenes
+        if n_cols == 2:
+            wsp = 0.35 if mostrar_env else 0.25
+            fig_off.subplots_adjust(top=0.92, bottom=0.08, left=0.08, right=0.92, hspace=0.45, wspace=wsp)
+        else:
+            if n_rows == 3:
+                fig_off.subplots_adjust(top=0.95, bottom=0.08, left=0.08, right=0.92, hspace=0.45)
+            elif n_rows == 2:
+                fig_off.subplots_adjust(top=0.95, bottom=0.08, left=0.08, right=0.92, hspace=0.35)
+            else:
+                fig_off.subplots_adjust(top=0.95, bottom=0.10, left=0.08, right=0.95)
+
+        # Configurar estilos fijos una sola vez
+        for ax in fig_off.axes:
+            ax.set_facecolor('#121216')
+            ax.grid(True, linestyle=':', alpha=0.25)
+            # Adaptar colores de bordes y etiquetas a tema oscuro
+            ax.spines['bottom'].set_color('#202028')
+            ax.spines['top'].set_color('#202028')
+            ax.spines['left'].set_color('#202028')
+            ax.spines['right'].set_color('#202028')
+            ax.xaxis.label.set_color('#E1E1E6')
+            ax.yaxis.label.set_color('#E1E1E6')
+            ax.tick_params(colors='#E1E1E6')
+
+        # Configurar leyendas fijas y títulos iniciales
+        if ax_signal:
+            ax_signal.set_xlabel("Tiempo relativo (µs)", fontsize=9)
+            ax_signal.set_ylabel("Voltaje (V)", fontsize=9)
+        if ax_signal_b:
+            ax_signal_b.set_xlabel("Tiempo relativo (µs)", fontsize=9)
+            ax_signal_b.set_ylabel("Voltaje (V)", fontsize=9)
+        if ax_fft:
+            ax_fft.set_xlabel("Frecuencia (MHz)", fontsize=9)
+            ax_fft.set_ylabel("PSD (V²/Hz)", fontsize=9)
+            ax_fft.set_yscale('log')
+        if ax_fft_b:
+            ax_fft_b.set_xlabel("Frecuencia (MHz)", fontsize=9)
+            ax_fft_b.set_ylabel("PSD (V²/Hz)", fontsize=9)
+            ax_fft_b.set_yscale('log')
+        if ax_ratio:
+            ax_ratio.set_xlabel("Frecuencia (MHz)", fontsize=9)
+            ax_ratio.set_ylabel("Ratio A/B", fontsize=9)
+            ax_ratio.set_yscale('log')
+            # Línea horizontal fija en Y=1
+            ax_ratio.axhline(1.0, color='#8A8A9E', linestyle=':', linewidth=1.0, alpha=0.7, label="Igualdad (1:1)")
+
+        # Inicializar líneas de datos vacías para actualizar dinámicamente
+        line_sig_a = None
+        line_sig_b = None
+        line_fft_a = None
+        line_fft_b = None
+        line_ratio = None
+
+        if ax_signal:
+            line_sig_a, = ax_signal.plot([], [], color=COLOR_VOLTAGE, linewidth=1.2)
+        if ax_signal_b:
+            line_sig_b, = ax_signal_b.plot([], [], color="#FF1744", linewidth=1.2)
+        if ax_fft:
+            line_fft_a, = ax_fft.plot([], [], color=COLOR_FFT, linewidth=1.5)
+        if ax_fft_b:
+            line_fft_b, = ax_fft_b.plot([], [], color="#FFD600", linewidth=1.5)
+        if ax_ratio:
+            line_ratio, = ax_ratio.plot([], [], color='#FF4081', linewidth=1.5)
+
+        # 5. Cargar y plotear variables ambientales secuenciales ONCE (son estáticas, solo cambia la marca amarilla)
+        info_c0 = dhn.obtener_info_chunk(self.test_group, self.chunks[0])
+        t_first = info_c0['start_time']
+        
+        # Color constantes para ambiental B
+        COLOR_TEMP_B = "#FF5252"
+        COLOR_HUMID_B = "#69F0AE"
+
+        t_env_a, temp_a, hum_a = [], [], []
+        t_env_b, temp_b, hum_b = [], [], []
+
+        for cname in chunks_a:
+            if cname in self.test_group:
+                h, t, ts = dhn.obtener_datos_ambientales(self.test_group, cname)
+                if len(ts) > 0:
+                    t_env_a.extend(ts - t_first)
+                    temp_a.extend(t)
+                    hum_a.extend(h)
+
+        if compare:
+            for cname in chunks_b:
+                if cname in self.test_group:
+                    h, t, ts = dhn.obtener_datos_ambientales(self.test_group, cname)
+                    if len(ts) > 0:
+                        t_env_b.extend(ts - t_first)
+                        temp_b.extend(t)
+                        hum_b.extend(h)
+
+        vline_a = None
+        vline_b = None
+
+        if ax_env and t_env_a:
+            ax_env.plot(t_env_a, temp_a, color=COLOR_TEMP, linewidth=1.5, label="Temp A (°C)" if compare else "Temp (°C)")
+            ax_env.set_title("Grupo A - Variables Ambientales" if compare else "Perfil de Variables Ambientales Secuencial (Multichunk)", fontsize=10, color='#FFFFFF')
+            ax_env.set_xlabel("Tiempo absoluto del experimento (s)", fontsize=9)
+            ax_env.set_ylabel("Temperatura (°C)", fontsize=9, color=COLOR_TEMP)
+            ax_env.tick_params(axis='y', labelcolor=COLOR_TEMP)
+            
+            ax_hum_a = ax_env.twinx()
+            ax_hum_a.plot(t_env_a, hum_a, color=COLOR_HUMID, linewidth=1.5, label="Hum A (%)" if compare else "Humedad (%)")
+            ax_hum_a.set_ylabel("Humedad (%)", fontsize=9, color=COLOR_HUMID)
+            ax_hum_a.tick_params(axis='y', labelcolor=COLOR_HUMID)
+            ax_hum_a.spines['right'].set_color('#202028')
+            ax_hum_a.tick_params(colors='#E1E1E6')
+            
+            vline_a = ax_env.axvline(0.0, color="#FFD700", linestyle="--", linewidth=1.2, label="Instante Señal")
+            
+            lines1, labels1 = ax_env.get_legend_handles_labels()
+            lines2, labels2 = ax_hum_a.get_legend_handles_labels()
+            if lines1 + lines2:
+                ax_env.legend(lines1 + lines2, labels1 + labels2, loc='upper right', framealpha=0.6)
+
+        if ax_env_b and t_env_b:
+            ax_env_b.plot(t_env_b, temp_b, color=COLOR_TEMP_B, linewidth=1.5, label="Temp B (°C)")
+            ax_env_b.set_title("Grupo B - Variables Ambientales", fontsize=10, color='#FFFFFF')
+            ax_env_b.set_xlabel("Tiempo absoluto del experimento (s)", fontsize=9)
+            ax_env_b.set_ylabel("Temperatura (°C)", fontsize=9, color=COLOR_TEMP_B)
+            ax_env_b.tick_params(axis='y', labelcolor=COLOR_TEMP_B)
+            
+            ax_hum_b = ax_env_b.twinx()
+            ax_hum_b.plot(t_env_b, hum_b, color=COLOR_HUMID_B, linewidth=1.5, label="Hum B (%)")
+            ax_hum_b.set_ylabel("Humedad (%)", fontsize=9, color=COLOR_HUMID_B)
+            ax_hum_b.tick_params(axis='y', labelcolor=COLOR_HUMID_B)
+            ax_hum_b.spines['right'].set_color('#202028')
+            ax_hum_b.tick_params(colors='#E1E1E6')
+            
+            vline_b = ax_env_b.axvline(0.0, color="#FFD700", linestyle="--", linewidth=1.2, label="Instante Señal")
+            
+            lines1, labels1 = ax_env_b.get_legend_handles_labels()
+            lines2, labels2 = ax_hum_b.get_legend_handles_labels()
+            if lines1 + lines2:
+                ax_env_b.legend(lines1 + lines2, labels1 + labels2, loc='upper right', framealpha=0.6)
+
+        # 6. Loop de procesamiento de frames
         frames = []
         frame_timestamps = []
-
-        # 5. Iterar sobre las capturas
         success = True
+
+        dt = 1.0 / 3e9
+
         try:
             for i in range(total_capturas):
                 if progress.wasCanceled():
@@ -1738,41 +1933,118 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 progress.setValue(i)
                 QtWidgets.QApplication.processEvents()
 
-                # Cambiar señal activa
-                self.spin_individual.setValue(i + 1)
-                QtWidgets.QApplication.processEvents()
-
-                # Obtener timestamp de este frame para calcular los retardos proporcionales
-                t_frame = 0.0
-                if self.chk_compare_groups.isChecked():
-                    t_a = None
-                    t_b = None
-                    try:
-                        chunk_name_a, local_idx_a, _ = self.obtener_senal_grupo(chunks_a, i + 1)
-                        _, t_a, _ = dhn.obtener_datos_senal(self.test_group, chunk_name_a, local_idx_a)
-                    except ValueError:
-                        pass
-                    try:
-                        chunk_name_b, local_idx_b, _ = self.obtener_senal_grupo(chunks_b, i + 1)
-                        _, t_b, _ = dhn.obtener_datos_senal(self.test_group, chunk_name_b, local_idx_b)
-                    except ValueError:
-                        pass
-                    if t_a is not None:
-                        t_frame = t_a
-                    elif t_b is not None:
-                        t_frame = t_b
-                else:
-                    try:
-                        chunk_name, local_idx, _ = self.obtener_senal_grupo(chunks, i + 1)
-                        _, t_frame, _ = dhn.obtener_datos_senal(self.test_group, chunk_name, local_idx)
-                    except ValueError:
-                        pass
+                # Carga de datos de la señal actual
+                has_a = False
+                has_b = False
                 
+                v_raw_a, t_a = None, None
+                v_raw_b, t_b = None, None
+
+                # Obtener señal A
+                try:
+                    cname_a, l_idx_a, _ = self.obtener_senal_grupo(chunks_a, i + 1)
+                    v_raw_a, t_a, _ = dhn.obtener_datos_senal(self.test_group, cname_a, l_idx_a)
+                    has_a = True
+                except ValueError:
+                    pass
+
+                # Obtener señal B
+                if compare:
+                    try:
+                        cname_b, l_idx_b, _ = self.obtener_senal_grupo(chunks_b, i + 1)
+                        v_raw_b, t_b, _ = dhn.obtener_datos_senal(self.test_group, cname_b, l_idx_b)
+                        has_b = True
+                    except ValueError:
+                        pass
+
+                # Registrar timestamp para retrasos
+                t_frame = t_a if has_a else (t_b if has_b else 0.0)
                 frame_timestamps.append(t_frame)
 
-                # Capturar gráfico del canvas
+                # --- 6a. Graficar Señales de Voltaje ---
+                if ax_signal:
+                    if has_a:
+                        tiempos_us = np.arange(len(v_raw_a), dtype=np.float64) * (dt * 1e6)
+                        line_sig_a.set_data(tiempos_us, v_raw_a)
+                        line_sig_a.set_label(f"Señal A #{i+1}")
+                        ax_signal.set_title(f"Grupo A - Señal #{i+1}", fontsize=10, color='#00E5FF', pad=5)
+                        ax_signal.set_xlim(tiempos_us[0], tiempos_us[-1])
+                        ax_signal.set_ylim(np.min(v_raw_a) - 0.05, np.max(v_raw_a) + 0.05)
+                        if ax_signal.get_legend_handles_labels()[0]:
+                            ax_signal.legend(loc='upper right', framealpha=0.6)
+                    else:
+                        line_sig_a.set_data([], [])
+
+                if ax_signal_b and compare:
+                    if has_b:
+                        tiempos_us = np.arange(len(v_raw_b), dtype=np.float64) * (dt * 1e6)
+                        line_sig_b.set_data(tiempos_us, v_raw_b)
+                        line_sig_b.set_label(f"Señal B #{i+1}")
+                        ax_signal_b.set_title(f"Grupo B - Señal #{i+1}", fontsize=10, color='#FF1744', pad=5)
+                        ax_signal_b.set_xlim(tiempos_us[0], tiempos_us[-1])
+                        ax_signal_b.set_ylim(np.min(v_raw_b) - 0.05, np.max(v_raw_b) + 0.05)
+                        if ax_signal_b.get_legend_handles_labels()[0]:
+                            ax_signal_b.legend(loc='upper right', framealpha=0.6)
+                    else:
+                        line_sig_b.set_data([], [])
+
+                # --- 6b. Calcular y Graficar FFT ---
+                psd_a = None
+                psd_b = None
+                f_axis = None
+
+                if has_a:
+                    f, psd_a = welch(v_raw_a, fs=3e9, nperseg=1024)
+                    f_axis = f
+                    mean_val_a = np.mean(psd_a)
+                    if ax_fft:
+                        line_fft_a.set_data(f / 1e6, psd_a)
+                        line_fft_a.set_label(f"PSD A #{i+1} (Media: {mean_val_a:.2e} V²/Hz)")
+                        ax_fft.set_title(f"Grupo A - Welch PSD", fontsize=10, color='#E040FB', pad=5)
+                        ax_fft.set_xlim(f[0] / 1e6, f[-1] / 1e6)
+                        ax_fft.set_ylim(np.min(psd_a) / 5, np.max(psd_a) * 5)
+                        if ax_fft.get_legend_handles_labels()[0]:
+                            ax_fft.legend(loc='upper right', framealpha=0.6)
+
+                if has_b and compare:
+                    f, psd_b = welch(v_raw_b, fs=3e9, nperseg=1024)
+                    f_axis = f
+                    mean_val_b = np.mean(psd_b)
+                    if ax_fft_b:
+                        line_fft_b.set_data(f / 1e6, psd_b)
+                        line_fft_b.set_label(f"PSD B #{i+1} (Media: {mean_val_b:.2e} V²/Hz)")
+                        ax_fft_b.set_title(f"Grupo B - Welch PSD", fontsize=10, color='#FFD600', pad=5)
+                        ax_fft_b.set_xlim(f[0] / 1e6, f[-1] / 1e6)
+                        ax_fft_b.set_ylim(np.min(psd_b) / 5, np.max(psd_b) * 5)
+                        if ax_fft_b.get_legend_handles_labels()[0]:
+                            ax_fft_b.legend(loc='upper right', framealpha=0.6)
+
+                # --- 6c. Calcular y Graficar Ratio ---
+                if ax_ratio and psd_a is not None and psd_b is not None:
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        ratio = psd_a / psd_b
+                    valid_ratio = ratio[np.isfinite(ratio)]
+                    mean_ratio = np.mean(valid_ratio) if len(valid_ratio) > 0 else 0.0
+                    
+                    line_ratio.set_data(f_axis / 1e6, ratio)
+                    line_ratio.set_label(f"Ratio Señal #{i+1} (Media: {mean_ratio:.2f})")
+                    ax_ratio.set_title(f"Ratio de FFT (Grupo A / Grupo B) - Señal #{i+1}", fontsize=10, color='#FF4081', pad=5)
+                    ax_ratio.set_xlim(f_axis[0] / 1e6, f_axis[-1] / 1e6)
+                    ax_ratio.set_ylim(np.min(valid_ratio) / 3 if len(valid_ratio) > 0 else 0.01, np.max(valid_ratio) * 3 if len(valid_ratio) > 0 else 100)
+                    if ax_ratio.get_legend_handles_labels()[0]:
+                        ax_ratio.legend(loc='upper right', framealpha=0.6)
+
+                # --- 6d. Actualizar Marca Amarilla Ambiental ---
+                if vline_a is not None and t_a is not None:
+                    t_signal_seq_a = t_a - t_first
+                    vline_a.set_xdata([t_signal_seq_a, t_signal_seq_a])
+                if vline_b is not None and t_b is not None:
+                    t_signal_seq_b = t_b - t_first
+                    vline_b.set_xdata([t_signal_seq_b, t_signal_seq_b])
+
+                # Guardar el frame a memoria
                 buffer = io.BytesIO()
-                self.fig.savefig(buffer, format='png', dpi=120, bbox_inches='tight')
+                fig_off.savefig(buffer, format='png', dpi=120, bbox_inches='tight', facecolor=fig_off.get_facecolor())
                 buffer.seek(0)
                 img = Image.open(buffer)
                 img.load()
@@ -1784,17 +2056,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "Error durante la generación", f"Error procesando frames:\n{e}")
             success = False
 
-        # 6. Restaurar estado de GUI original
-        self.combo_modo_vis.blockSignals(True)
-        self.combo_modo_vis.setCurrentIndex(original_mode)
-        self.combo_modo_vis.blockSignals(False)
-        
-        self.spin_individual.blockSignals(True)
-        self.spin_individual.setValue(original_spin_val)
-        self.spin_individual.blockSignals(False)
-        
-        self.graficar_datos()
-        QtWidgets.QApplication.processEvents()
+        # Cerrar la figura offscreen para liberar memoria
+        plt.close(fig_off)
 
         if not success:
             QtWidgets.QMessageBox.warning(self, "Cancelado / Fallido", "No se generó el archivo GIF.")
