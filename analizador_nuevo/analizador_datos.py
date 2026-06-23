@@ -1066,6 +1066,7 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 ratio = mean_psd_a / mean_psd_b
             valid_ratio = ratio[np.isfinite(ratio)]
             mean_ratio = np.mean(valid_ratio) if len(valid_ratio) > 0 else 0.0
+            self.ax_ratio.axhline(1.0, color='#8A8A9E', linestyle=':', linewidth=1.0, alpha=0.7, label="Igualdad (1:1)")
             self.ax_ratio.plot(
                 f_axis / 1e6, ratio,
                 color='#FF4081', linewidth=1.5,
@@ -1074,7 +1075,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
             self.ax_ratio.set_title("Ratio de FFT Promedio (Grupo A / Grupo B)", fontsize=10, color='#FF4081', pad=5)
             self.ax_ratio.set_xlabel("Frecuencia (MHz)", fontsize=9)
             self.ax_ratio.set_ylabel("Ratio A/B", fontsize=9)
-            self.ax_ratio.legend(loc='upper right', framealpha=0.6)
+            if self.ax_ratio.get_legend_handles_labels()[0]:
+                self.ax_ratio.legend(loc='upper right', framealpha=0.6)
 
         if self.ax_signal:
             title = "Comparación: Grupo A" if self.ax_signal_b else ("Superposición Multichunk" if self.chk_multichunk.isChecked() else f"Superposición de Señales (Chunk: {chunk_name})")
@@ -1098,14 +1100,16 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
             self.ax_fft.set_xlabel("Frecuencia (MHz)", fontsize=9)
             self.ax_fft.set_ylabel("PSD (V²/Hz)", fontsize=9)
             self.ax_fft.grid(True, linestyle=':', alpha=0.25)
-            self.ax_fft.legend(loc='upper right', framealpha=0.6)
+            if self.ax_fft.get_legend_handles_labels()[0]:
+                self.ax_fft.legend(loc='upper right', framealpha=0.6)
 
         if self.ax_fft_b:
             self.ax_fft_b.set_title("Grupo B - Espectro (Welch PSD)", fontsize=10, color='#FFD600', pad=5)
             self.ax_fft_b.set_xlabel("Frecuencia (MHz)", fontsize=9)
             self.ax_fft_b.set_ylabel("PSD (V²/Hz)", fontsize=9)
             self.ax_fft_b.grid(True, linestyle=':', alpha=0.25)
-            self.ax_fft_b.legend(loc='upper right', framealpha=0.6)
+            if self.ax_fft_b.get_legend_handles_labels()[0]:
+                self.ax_fft_b.legend(loc='upper right', framealpha=0.6)
             self.ax_fft_b.set_ylabel("PSD (V²/Hz)", fontsize=9)
             self.ax_fft_b.grid(True, linestyle=':', alpha=0.25)
 
@@ -1167,7 +1171,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 self.ax_signal.set_xlabel("Tiempo relativo (µs)", fontsize=9)
                 self.ax_signal.set_ylabel("Voltaje (V)", fontsize=9)
                 self.ax_signal.grid(True, linestyle=':', alpha=0.25)
-                self.ax_signal.legend(loc='upper right', framealpha=0.6)
+                if self.ax_signal.get_legend_handles_labels()[0]:
+                    self.ax_signal.legend(loc='upper right', framealpha=0.6)
                 
             if self.ax_signal_b and has_b:
                 n_points = len(v_raw_b)
@@ -1177,7 +1182,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 self.ax_signal_b.set_xlabel("Tiempo relativo (µs)", fontsize=9)
                 self.ax_signal_b.set_ylabel("Voltaje (V)", fontsize=9)
                 self.ax_signal_b.grid(True, linestyle=':', alpha=0.25)
-                self.ax_signal_b.legend(loc='upper right', framealpha=0.6)
+                if self.ax_signal_b.get_legend_handles_labels()[0]:
+                    self.ax_signal_b.legend(loc='upper right', framealpha=0.6)
                 
             # Plot Welch PSD on ax_fft and ax_fft_b
             psd_a = None
@@ -1194,7 +1200,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                     self.ax_fft.set_xlabel("Frecuencia (MHz)", fontsize=9)
                     self.ax_fft.set_ylabel("PSD (V²/Hz)", fontsize=9)
                     self.ax_fft.grid(True, linestyle=':', alpha=0.25)
-                    self.ax_fft.legend(loc='upper right', framealpha=0.6)
+                    if self.ax_fft.get_legend_handles_labels()[0]:
+                        self.ax_fft.legend(loc='upper right', framealpha=0.6)
                 
             if has_b:
                 f, psd_b = welch(v_raw_b, fs=3e9, nperseg=1024)
@@ -1206,7 +1213,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                     self.ax_fft_b.set_xlabel("Frecuencia (MHz)", fontsize=9)
                     self.ax_fft_b.set_ylabel("PSD (V²/Hz)", fontsize=9)
                     self.ax_fft_b.grid(True, linestyle=':', alpha=0.25)
-                    self.ax_fft_b.legend(loc='upper right', framealpha=0.6)
+                    if self.ax_fft_b.get_legend_handles_labels()[0]:
+                        self.ax_fft_b.legend(loc='upper right', framealpha=0.6)
 
             # Plot Ratio on ax_ratio if available
             if self.ax_ratio and psd_a is not None and psd_b is not None:
@@ -1214,6 +1222,7 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                     ratio = psd_a / psd_b
                 valid_ratio = ratio[np.isfinite(ratio)]
                 mean_ratio = np.mean(valid_ratio) if len(valid_ratio) > 0 else 0.0
+                self.ax_ratio.axhline(1.0, color='#8A8A9E', linestyle=':', linewidth=1.0, alpha=0.7, label="Igualdad (1:1)")
                 self.ax_ratio.plot(
                     f_axis / 1e6, ratio,
                     color='#FF4081', linewidth=1.5, label=f"Ratio Señal #{idx_sel+1} (Media: {mean_ratio:.2f})"
@@ -1221,7 +1230,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 self.ax_ratio.set_title(f"Ratio de FFT (Grupo A / Grupo B) - Señal #{idx_sel+1}", fontsize=10, color='#FF4081', pad=5)
                 self.ax_ratio.set_xlabel("Frecuencia (MHz)", fontsize=9)
                 self.ax_ratio.set_ylabel("Ratio A/B", fontsize=9)
-                self.ax_ratio.legend(loc='upper right', framealpha=0.6)
+                if self.ax_ratio.get_legend_handles_labels()[0]:
+                    self.ax_ratio.legend(loc='upper right', framealpha=0.6)
                 
             # Plot environment on ax_env
             if self.ax_env:
@@ -1258,7 +1268,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 self.ax_signal.set_xlabel("Tiempo relativo (µs)", fontsize=9)
                 self.ax_signal.set_ylabel("Voltaje (V)", fontsize=9)
                 self.ax_signal.grid(True, linestyle=':', alpha=0.25)
-                self.ax_signal.legend(loc='upper right', framealpha=0.6)
+                if self.ax_signal.get_legend_handles_labels()[0]:
+                    self.ax_signal.legend(loc='upper right', framealpha=0.6)
 
             # Plot Welch PSD on ax_fft
             if self.ax_fft:
@@ -1269,7 +1280,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 self.ax_fft.set_xlabel("Frecuencia (MHz)", fontsize=9)
                 self.ax_fft.set_ylabel("PSD (V²/Hz)", fontsize=9)
                 self.ax_fft.grid(True, linestyle=':', alpha=0.25)
-                self.ax_fft.legend(loc='upper right', framealpha=0.6)
+                if self.ax_fft.get_legend_handles_labels()[0]:
+                    self.ax_fft.legend(loc='upper right', framealpha=0.6)
 
             # Environmental variables
             if self.ax_env:
@@ -1299,7 +1311,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                         
                         lines1, labels1 = self.ax_env.get_legend_handles_labels()
                         lines2, labels2 = ax_hum.get_legend_handles_labels()
-                        self.ax_env.legend(lines1 + lines2, labels1 + labels2, loc='upper right', framealpha=0.6)
+                        if (lines1 + lines2):
+                            self.ax_env.legend(lines1 + lines2, labels1 + labels2, loc='upper right', framealpha=0.6)
 
     def _plot_environmental_sequential(self, t_highlight=None, active_chunk=None):
         if self.chk_compare_groups.isChecked():
@@ -1373,7 +1386,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 
             lines1, labels1 = self.ax_env.get_legend_handles_labels()
             lines2, labels2 = ax_hum_a.get_legend_handles_labels()
-            self.ax_env.legend(lines1 + lines2, labels1 + labels2, loc='upper right', framealpha=0.6)
+            if (lines1 + lines2):
+                self.ax_env.legend(lines1 + lines2, labels1 + labels2, loc='upper right', framealpha=0.6)
 
         # Plot Group B on self.ax_env_b
         if self.ax_env_b and t_env_b:
@@ -1394,7 +1408,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 
             lines1, labels1 = self.ax_env_b.get_legend_handles_labels()
             lines2, labels2 = ax_hum_b.get_legend_handles_labels()
-            self.ax_env_b.legend(lines1 + lines2, labels1 + labels2, loc='upper right', framealpha=0.6)
+            if (lines1 + lines2):
+                self.ax_env_b.legend(lines1 + lines2, labels1 + labels2, loc='upper right', framealpha=0.6)
 
     def _plot_full_time_series(self):
         chunks_a = self.obtener_chunks_grupo_a()
@@ -1536,6 +1551,7 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
             valid_ratio = ratio[np.isfinite(ratio)]
             mean_ratio = np.mean(valid_ratio) if len(valid_ratio) > 0 else 0.0
             
+            self.ax_ratio.axhline(1.0, color='#8A8A9E', linestyle=':', linewidth=1.0, alpha=0.7, label="Igualdad (1:1)")
             self.ax_ratio.plot(
                 f_axis / 1e6, ratio,
                 color='#FF4081', linewidth=1.5,
@@ -1544,7 +1560,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
             self.ax_ratio.set_title("Ratio de FFT Promedio - Serie Temporal (Grupo A / Grupo B)", fontsize=10, color='#FF4081', pad=5)
             self.ax_ratio.set_xlabel("Frecuencia (MHz)", fontsize=9)
             self.ax_ratio.set_ylabel("Ratio A/B", fontsize=9)
-            self.ax_ratio.legend(loc='upper right', framealpha=0.6)
+            if self.ax_ratio.get_legend_handles_labels()[0]:
+                self.ax_ratio.legend(loc='upper right', framealpha=0.6)
 
         if self.ax_signal:
             title_a = "Grupo A - Serie Temporal" if self.ax_signal_b else "Serie Temporal Completa"
@@ -1565,14 +1582,16 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
             self.ax_fft.set_xlabel("Frecuencia (MHz)", fontsize=9)
             self.ax_fft.set_ylabel("PSD (V²/Hz)", fontsize=9)
             self.ax_fft.grid(True, linestyle=':', alpha=0.25)
-            self.ax_fft.legend(loc='upper right', framealpha=0.6)
+            if self.ax_fft.get_legend_handles_labels()[0]:
+                self.ax_fft.legend(loc='upper right', framealpha=0.6)
             
         if self.ax_fft_b:
             self.ax_fft_b.set_title("Grupo B - Welch PSD", fontsize=10, color='#FFD600', pad=5)
             self.ax_fft_b.set_xlabel("Frecuencia (MHz)", fontsize=9)
             self.ax_fft_b.set_ylabel("PSD (V²/Hz)", fontsize=9)
             self.ax_fft_b.grid(True, linestyle=':', alpha=0.25)
-            self.ax_fft_b.legend(loc='upper right', framealpha=0.6)
+            if self.ax_fft_b.get_legend_handles_labels()[0]:
+                self.ax_fft_b.legend(loc='upper right', framealpha=0.6)
 
         # 4. Plot environment
         if self.ax_env:
@@ -1612,7 +1631,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                     
                     lines1, labels1 = self.ax_env.get_legend_handles_labels()
                     lines2, labels2 = ax_hum.get_legend_handles_labels()
-                    self.ax_env.legend(lines1 + lines2, labels1 + labels2, loc='upper right', framealpha=0.6)
+                    if (lines1 + lines2):
+                        self.ax_env.legend(lines1 + lines2, labels1 + labels2, loc='upper right', framealpha=0.6)
 
     def guardar_grafico(self):
         if not self.hdf_file:
