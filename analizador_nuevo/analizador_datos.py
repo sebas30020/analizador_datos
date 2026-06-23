@@ -1037,14 +1037,14 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                                 color=COLOR_FFT_B, alpha=0.15, linewidth=0.5
                             )
 
-        # Plot prominent average FFT curves
+        # Plot ghostly average FFT curves
         if total_signals_a > 0 and psds_a:
             mean_psd_a = np.mean(psds_a, axis=0)
             mean_val_a = np.mean(mean_psd_a)
             if self.ax_fft:
                 self.ax_fft.plot(
                     f_axis / 1e6, mean_psd_a,
-                    color=COLOR_FFT, linewidth=2.0, alpha=1.0,
+                    color=COLOR_FFT, linewidth=1.2, alpha=0.5, linestyle="--",
                     label=f"Promedio A (Media: {mean_val_a:.2e} V²/Hz)"
                 )
 
@@ -1054,7 +1054,7 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
             if self.ax_fft_b:
                 self.ax_fft_b.plot(
                     f_axis / 1e6, mean_psd_b,
-                    color=COLOR_FFT_B, linewidth=2.0, alpha=1.0,
+                    color=COLOR_FFT_B, linewidth=1.2, alpha=0.5, linestyle="--",
                     label=f"Promedio B (Media: {mean_val_b:.2e} V²/Hz)"
                 )
 
@@ -1506,14 +1506,14 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                             color=COLOR_FFT_B, alpha=0.15, linewidth=0.5
                         )
 
-        # Plot prominent average FFT curves
+        # Plot ghostly average FFT curves
         if total_signals_a > 0 and psds_a:
             mean_psd_a = np.mean(psds_a, axis=0)
             mean_val_a = np.mean(mean_psd_a)
             if self.ax_fft:
                 self.ax_fft.plot(
                     f_axis / 1e6, mean_psd_a,
-                    color=COLOR_FFT, linewidth=2.0, alpha=1.0,
+                    color=COLOR_FFT, linewidth=1.2, alpha=0.5, linestyle="--",
                     label=f"Promedio A (Media: {mean_val_a:.2e} V²/Hz)"
                 )
 
@@ -1523,7 +1523,7 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
             if self.ax_fft_b:
                 self.ax_fft_b.plot(
                     f_axis / 1e6, mean_psd_b,
-                    color=COLOR_FFT_B, linewidth=2.0, alpha=1.0,
+                    color=COLOR_FFT_B, linewidth=1.2, alpha=0.5, linestyle="--",
                     label=f"Promedio B (Media: {mean_val_b:.2e} V²/Hz)"
                 )
 
