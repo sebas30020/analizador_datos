@@ -296,7 +296,6 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
 
         layout_indiv.addLayout(self._build_nav_subpanel(),    stretch=1)
         layout_indiv.addLayout(self._build_meta_subpanel(),   stretch=1)
-        layout_indiv.addLayout(self._build_comment_subpanel(), stretch=2)
 
         lay.addWidget(self.panel_individual)
         return panel
@@ -373,22 +372,6 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
         vbox.addStretch()
         return vbox
 
-    def _build_comment_subpanel(self) -> QtWidgets.QVBoxLayout:
-        vbox = QtWidgets.QVBoxLayout()
-        vbox.setSpacing(5)
-
-        lbl = QtWidgets.QLabel("💬 DETALLES DEL EXPERIMENTO")
-        lbl.setStyleSheet("color: #8BA7C7; font-weight: bold; font-size: 10px;")
-        vbox.addWidget(lbl)
-
-        self.txt_comentario = QtWidgets.QTextEdit()
-        self.txt_comentario.setObjectName("TxtComentario")
-        self.txt_comentario.setReadOnly(True)
-        self.txt_comentario.setPlaceholderText("Sin comentarios en el experimento.")
-        self.txt_comentario.setMaximumHeight(70)
-        vbox.addWidget(self.txt_comentario)
-
-        return vbox
 
     @staticmethod
     def _make_section_label(text: str, obj_name: str) -> QtWidgets.QLabel:
@@ -823,7 +806,6 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
                 f"<b>Versión:</b> {self.metadata['version']}"
             )
             self.lbl_info_file.setTextFormat(QtCore.Qt.RichText)
-            self.txt_comentario.setPlainText(self.metadata['description'])
 
             self.combo_grupo.blockSignals(True)
             self.combo_grupo.clear()
@@ -902,7 +884,6 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
         self.lbl_total_indiv.setText("/ 1")
         self.lbl_val_timestamp.setText("--")
         self.lbl_val_trigger.setText("--")
-        self.txt_comentario.clear()
         self.limpiar_plots()
 
     # --- Plotting logic ---
