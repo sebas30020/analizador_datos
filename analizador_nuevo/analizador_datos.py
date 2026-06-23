@@ -92,6 +92,8 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
         )
         self.lbl_info_file.setWordWrap(True)
         self.lbl_info_file.setStyleSheet("color: #A0A0AB; font-size: 11px;")
+        self.lbl_info_file.setMinimumHeight(75)
+        self.lbl_info_file.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
         lay.addWidget(self.lbl_info_file)
 
         lay.addWidget(self._make_separator())
@@ -109,7 +111,7 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
         lay.addWidget(self.combo_modo_vis)
 
         lbl_grupo = QtWidgets.QLabel("Chunk Activo:")
-        lbl_grupo.setStyleSheet("color: #5E6070;")
+        lbl_grupo.setStyleSheet("color: #A0A0AB;")
         lay.addWidget(lbl_grupo)
 
         hbox_chunk = QtWidgets.QHBoxLayout()
@@ -137,7 +139,10 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
         self.lbl_info_chunk = QtWidgets.QLabel(
             "Señales en chunk: --\nTipo: --\nHumedad/Temp: --"
         )
+        self.lbl_info_chunk.setWordWrap(True)
         self.lbl_info_chunk.setStyleSheet("color: #8A8A9E; font-size: 11px;")
+        self.lbl_info_chunk.setMinimumHeight(70)
+        self.lbl_info_chunk.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
         lay.addWidget(self.lbl_info_chunk)
 
         lay.addWidget(self._make_separator())
@@ -153,7 +158,7 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
         # Rango de chunks
         hbox_range = QtWidgets.QHBoxLayout()
         lbl_from = QtWidgets.QLabel("Desde:")
-        lbl_from.setStyleSheet("color: #5E6070;")
+        lbl_from.setStyleSheet("color: #A0A0AB;")
         hbox_range.addWidget(lbl_from)
         self.spin_from_chunk = QtWidgets.QSpinBox()
         self.spin_from_chunk.setMinimum(1)
@@ -162,7 +167,7 @@ class AnalizadorNuevoGUI(QtWidgets.QMainWindow):
         hbox_range.addWidget(self.spin_from_chunk)
 
         lbl_to = QtWidgets.QLabel("Hasta:")
-        lbl_to.setStyleSheet("color: #5E6070;")
+        lbl_to.setStyleSheet("color: #A0A0AB;")
         hbox_range.addWidget(lbl_to)
         self.spin_to_chunk = QtWidgets.QSpinBox()
         self.spin_to_chunk.setMinimum(1)
